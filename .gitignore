@@ -17,3 +17,4 @@ local.properties
 .env
 node_modules/
 debug.keystore
+server/.chat-live/
