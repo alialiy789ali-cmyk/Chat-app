@@ -1,0 +1,6 @@
+{
+  "name": "Sovereign",
+  "description": "Sovereign communication and social super app with encrypted messaging, channels, feeds, and self-hosted privacy control.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

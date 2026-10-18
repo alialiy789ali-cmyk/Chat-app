@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # Sovereign REST & WebSocket Backend Service
+  sovereign-gateway:
+    image: sovereign-server:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sovereign-gateway
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=8443
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+      - S3_ENDPOINT=http://minio:9000
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - E2EE_KEY_DIRECTORY_ENABLED=true
+    ports:
+      - "8443:8443"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+    networks:
+      - sovereign-net
+
+  # PostgreSQL 16 Data Store
+  postgres:
+    image: postgres:16-alpine
+    container_name: sovereign-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sovereign}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_sovereign_db_pass_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-sovereign_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sovereign} -d ${POSTGRES_DB:-sovereign_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sovereign-net
+
+  # Redis 7 Event Bus & Realtime Cache
+  redis:
+    image: redis:7-alpine
+    container_name: sovereign-redis
+    restart: always
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-secure_redis_pass_2026}
+    volumes:
+      - redis_data:/data
+    networks:
+      - sovereign-net
+
+  # MinIO S3-Compatible Storage for Media & Encrypted Vault Backups
+  minio:
+    image: minio/minio:latest
+    container_name: sovereign-minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-sovereign_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-sovereign_minio_secret_key_2026}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - sovereign-net
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+
+networks:
+  sovereign-net:
+    driver: bridge
