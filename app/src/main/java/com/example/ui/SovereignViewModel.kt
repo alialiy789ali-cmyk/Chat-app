@@ -1,7 +1,10 @@
 package com.example.ui
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.data.LocalAudioRecorder
 import com.example.data.SovereignRepository
 import com.example.model.*
 import kotlinx.coroutines.Job
@@ -21,8 +24,21 @@ enum class HubTab {
 }
 
 class SovereignViewModel(
-    private val repository: SovereignRepository = SovereignRepository()
+    private val repository: SovereignRepository = SovereignRepository(),
+    private val audioRecorder: LocalAudioRecorder? = null
 ) : ViewModel() {
+
+    companion object {
+        fun factory(context: Context): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                require(modelClass.isAssignableFrom(SovereignViewModel::class.java))
+                val appContext = context.applicationContext
+                val repository = SovereignRepository(context = appContext)
+                return SovereignViewModel(repository, LocalAudioRecorder(appContext)) as T
+            }
+        }
+    }
 
     val currentUser = repository.currentUser
     val threads = repository.threads
@@ -32,6 +48,19 @@ class SovereignViewModel(
     val feedPosts = repository.feedPosts
     val activeCall = repository.activeCall
     val nodeLatency = repository.nodeLatency
+    val gatewaySession = repository.gatewaySession
+    val gatewayAccountBusy = repository.gatewayAccountBusy
+    val gatewayAccountMessage = repository.gatewayAccountMessage
+
+    fun registerGatewayAccount(baseUrl: String, handle: String, displayName: String, password: String) =
+        repository.registerGatewayAccount(baseUrl, handle, displayName, password)
+
+    fun loginGatewayAccount(baseUrl: String, handle: String, password: String) =
+        repository.loginGatewayAccount(baseUrl, handle, password)
+
+    fun logoutGatewayAccount() = repository.logoutGatewayAccount()
+
+    fun synchronizeGatewayMessages() = repository.synchronizeGatewayMessages()
 
     // Current Hub Tab
     private val _currentTab = MutableStateFlow(HubTab.CHATS)
@@ -88,8 +117,9 @@ class SovereignViewModel(
 
     fun openThread(threadId: String) {
         _activeThreadId.value = threadId
-        repository.markThreadAsRead(threadId)
     }
+
+    fun markThreadAsRead(threadId: String) = repository.markThreadAsRead(threadId)
 
     fun closeThread() {
         _activeThreadId.value = null
@@ -130,6 +160,8 @@ class SovereignViewModel(
     }
 
     fun startVoiceRecording() {
+        val recorder = audioRecorder ?: return
+        if (!recorder.start()) return
         _isRecordingVoice.value = true
         _voiceRecordingDuration.value = 0
         voiceJob?.cancel()
@@ -145,21 +177,38 @@ class SovereignViewModel(
         val duration = _voiceRecordingDuration.value.coerceAtLeast(1)
         _isRecordingVoice.value = false
         voiceJob?.cancel()
-
-        val threadId = _activeThreadId.value ?: return
+        val mediaPath = audioRecorder?.stop()
+        if (mediaPath == null) {
+            _voiceRecordingDuration.value = 0
+            return
+        }
+        val threadId = _activeThreadId.value
+        if (threadId == null) {
+            java.io.File(mediaPath).delete()
+            _voiceRecordingDuration.value = 0
+            return
+        }
         repository.sendMessage(
             threadId = threadId,
-            content = "رسالة صوتية مشفرة",
+            content = "رسالة صوتية محلية",
             mediaType = MediaType.AUDIO,
+            mediaUrl = mediaPath,
             audioDurationSec = duration,
             selfDestructSec = _ephemeralTimerSec.value
         )
+        _voiceRecordingDuration.value = 0
     }
 
     fun cancelVoiceRecording() {
         _isRecordingVoice.value = false
         voiceJob?.cancel()
+        audioRecorder?.cancel()
         _voiceRecordingDuration.value = 0
+    }
+
+    override fun onCleared() {
+        audioRecorder?.cancel()
+        super.onCleared()
     }
 
     fun broadcastPost(channelId: String, text: String) {
@@ -221,5 +270,8 @@ class SovereignViewModel(
     fun toggleDarkMode() = repository.toggleDarkMode()
     fun regenerateKeys() = repository.regenerateIdentityKeys()
     fun purgeVault() = repository.purgeLocalVault()
+    fun createEncryptedBackup(password: CharArray) = repository.createEncryptedBackup(password)
+    fun restoreEncryptedBackup(bytes: ByteArray, password: CharArray) =
+        repository.restoreEncryptedBackup(bytes, password)
     fun pingNode() = repository.pingNode()
 }

@@ -40,8 +40,4 @@ object CryptoEngine {
         return result.toString()
     }
 
-    fun simulateEnvelopeEncryption(plaintext: String): String {
-        val digest = sha256(plaintext.toByteArray()).take(12)
-        return "🔒 [E2EE:AES-256-GCM::$digest]"
-    }
 }

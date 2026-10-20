@@ -1,6 +1,12 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.media.MediaPlayer
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -23,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -81,7 +88,7 @@ fun ChatsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("chat_search_input"),
-                        placeholder = { Text("بحث في المحادثات المشفرة...", fontSize = 13.sp) },
+                        placeholder = { Text("بحث في المحادثات المحلية...", fontSize = 13.sp) },
                         leadingIcon = {
                             Icon(Icons.Default.Search, contentDescription = "Search", tint = SlateMuted)
                         },
@@ -121,7 +128,7 @@ fun ChatsScreen(
                         FilterChip(
                             selected = selectedFilter == 1,
                             onClick = { selectedFilter = 1 },
-                            label = { Text("محادثات خاصة E2EE") },
+                            label = { Text("محادثات فردية") },
                             leadingIcon = {
                                 Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(14.dp))
                             },
@@ -316,6 +323,11 @@ fun ConversationDetailScreen(
 ) {
     BackHandler { onBack() }
 
+    val context = LocalContext.current
+    val voicePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) viewModel.startVoiceRecording() }
+
     val allMessages by viewModel.messages.collectAsState()
     val threadMessages = remember(allMessages, thread.id) {
         allMessages[thread.id] ?: emptyList()
@@ -332,6 +344,9 @@ fun ConversationDetailScreen(
         if (threadMessages.isNotEmpty()) {
             listState.animateScrollToItem(threadMessages.size - 1)
         }
+    }
+    LaunchedEffect(thread.id, threadMessages) {
+        viewModel.markThreadAsRead(thread.id)
     }
 
     Scaffold(
@@ -361,7 +376,7 @@ fun ConversationDetailScreen(
                         name = thread.title,
                         colorHex = thread.avatarColor,
                         sizeDp = 40,
-                        showShield = true
+                        showShield = false
                     )
 
                     Spacer(modifier = Modifier.width(10.dp))
@@ -380,14 +395,14 @@ fun ConversationDetailScreen(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = "E2EE Verified",
+                                imageVector = Icons.Default.Storage,
+                                contentDescription = "Local storage",
                                 tint = EmeraldPrimary,
                                 modifier = Modifier.size(14.dp)
                             )
                         }
                         Text(
-                            text = if (thread.isGroup) "${thread.membersCount} أعضاء • مشفر بالكامل" else "${thread.handle} • تشفير طرفي",
+                            text = if (thread.isGroup) "${thread.membersCount} أعضاء • بيانات محلية" else "${thread.handle} • محفوظ محليًا",
                             fontSize = 11.sp,
                             color = EmeraldPrimary
                         )
@@ -531,7 +546,7 @@ fun ConversationDetailScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .testTag("chat_message_input"),
-                                placeholder = { Text("اكتب رسالة مشفرة...", fontSize = 13.sp) },
+                                placeholder = { Text("اكتب رسالة… تُشفّر عند اتصال الحساب، وإلا تبقى محلية", fontSize = 13.sp) },
                                 shape = RoundedCornerShape(24.dp),
                                 maxLines = 4,
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -561,7 +576,13 @@ fun ConversationDetailScreen(
                                 }
                             } else {
                                 IconButton(
-                                    onClick = { viewModel.startVoiceRecording() },
+                                    onClick = {
+                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                            viewModel.startVoiceRecording()
+                                        } else {
+                                            voicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                        }
+                                    },
                                     modifier = Modifier
                                         .size(44.dp)
                                         .clip(CircleShape)
@@ -617,13 +638,13 @@ fun ConversationDetailScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = EmeraldPrimary)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("التحقق من بصمة الأمان السيادية")
+                    Text("معلومات التخزين والحماية")
                 }
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "بصمة التشفير الطرفي (Safety Number) لمطابقتها مع الطرف الآخر عبر قناة آمنة خارج النطاق:",
+                        text = if (thread.isEncrypted) "الرسائل التي تمت مزامنتها هنا أُرسلت داخل envelope مشفّر وموقّع بـ P-256. الرسائل القديمة أو المحلية قد لا تكون قد أُرسلت. تحقق الهوية خارج القناة غير متاح، وهذا ليس Signal ولا يوفر forward secrecy؛ التخزين المحلي محمي بمفتاح Android Keystore." else "هذه محادثة محلية أو تجريبية ولم يثبت إرسالها إلى الطرف الآخر. التخزين المحلي مشفّر على الجهاز؛ لا تعتبرها E2EE حتى يظهر نجاح الإرسال عبر حساب وخادم فعليين.",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -643,9 +664,9 @@ fun ConversationDetailScreen(
                         )
                     }
                     Text(
-                        text = "الحالة: الشفرة متطابقة، لا توجد هجمات رجل في المنتصف (Zero Man-In-The-Middle).",
+                        text = "لا يمكن التحقق من الاتصال أو مقاومة هجمات الوسيط في النسخة الحالية.",
                         fontSize = 12.sp,
-                        color = SlateMuted
+                        color = AmberWarning
                     )
                 }
             },
@@ -654,7 +675,7 @@ fun ConversationDetailScreen(
                     onClick = { showSecurityAudit = false },
                     colors = ButtonDefaults.buttonColors(containerColor = EmeraldPrimary)
                 ) {
-                    Text("تم التحقق بنجاح", color = SovereignVoid)
+                    Text("إغلاق", color = SovereignVoid)
                 }
             }
         )
@@ -667,6 +688,11 @@ fun MessageBubble(
     modifier: Modifier = Modifier
 ) {
     val timeFormatter = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
+    var audioPlayer by remember(message.id) { mutableStateOf<MediaPlayer?>(null) }
+    var isPlayingAudio by remember(message.id) { mutableStateOf(false) }
+    DisposableEffect(message.id) {
+        onDispose { runCatching { audioPlayer?.release() } }
+    }
     val isSelf = message.isSelf
 
     Row(
@@ -707,13 +733,35 @@ fun MessageBubble(
                         Surface(
                             shape = CircleShape,
                             color = if (isSelf) TitaniumWhite else EmeraldPrimary,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clickable(enabled = message.mediaUrl != null) {
+                                    runCatching {
+                                        if (isPlayingAudio) {
+                                            audioPlayer?.pause()
+                                            isPlayingAudio = false
+                                        } else {
+                                            audioPlayer?.release()
+                                            audioPlayer = MediaPlayer().apply {
+                                                setDataSource(message.mediaUrl ?: return@clickable)
+                                                setOnCompletionListener {
+                                                    isPlayingAudio = false
+                                                    audioPlayer?.release()
+                                                    audioPlayer = null
+                                                }
+                                                prepare()
+                                                start()
+                                            }
+                                            isPlayingAudio = true
+                                        }
+                                    }
+                                }
                         ) {
                             Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = "Play",
+                                imageVector = if (isPlayingAudio) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlayingAudio) "Pause voice message" else "Play voice message",
                                 tint = SovereignVoid,
-                                modifier = Modifier.padding(4.dp)
+                                modifier = Modifier.padding(6.dp)
                             )
                         }
                         // Waveform bars
@@ -775,11 +823,23 @@ fun MessageBubble(
                             imageVector = when (message.status) {
                                 MessageStatus.READ -> Icons.Default.DoneAll
                                 MessageStatus.DELIVERED -> Icons.Default.DoneAll
-                                MessageStatus.SENT -> Icons.Default.Check
+                                MessageStatus.SENT -> if (message.isEncrypted) Icons.Default.Check else Icons.Default.CloudOff
                                 MessageStatus.SENDING -> Icons.Default.Schedule
+                                MessageStatus.FAILED -> Icons.Default.ErrorOutline
                             },
-                            contentDescription = "Status",
-                            tint = if (message.status == MessageStatus.READ) CyanSignal else TitaniumWhite.copy(alpha = 0.7f),
+                            contentDescription = when {
+                                message.status == MessageStatus.FAILED -> "فشل الإرسال"
+                                message.status == MessageStatus.SENDING -> "جارٍ الإرسال"
+                                message.status == MessageStatus.SENT && !message.isEncrypted -> "محفوظ محليًا، لم يُرسل إلى الخادم"
+                                message.status == MessageStatus.READ -> "مقروء"
+                                message.status == MessageStatus.DELIVERED -> "تم التسليم"
+                                else -> "أُرسل مشفّرًا"
+                            },
+                            tint = when (message.status) {
+                                MessageStatus.READ -> CyanSignal
+                                MessageStatus.FAILED -> RoseDestruct
+                                else -> TitaniumWhite.copy(alpha = 0.7f)
+                            },
                             modifier = Modifier.size(13.dp)
                         )
                     }

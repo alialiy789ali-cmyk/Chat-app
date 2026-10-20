@@ -1,6 +1,6 @@
 {
   "name": "Sovereign",
-  "description": "Sovereign communication and social super app with encrypted messaging, channels, feeds, and self-hosted privacy control.",
+  "description": "Offline-first Android communication prototype with encrypted local state, local voice notes, a self-hosted gateway foundation, channels, and a social feed.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

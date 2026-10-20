@@ -1,89 +1,67 @@
-version: '3.8'
-
 services:
-  # Sovereign REST & WebSocket Backend Service
   sovereign-gateway:
-    image: sovereign-server:latest
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: sovereign-gateway
-    restart: always
+    image: sovereign-gateway:local
+    restart: unless-stopped
     environment:
-      - NODE_ENV=production
-      - PORT=8443
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      - REDIS_URL=redis://redis:6379
-      - S3_ENDPOINT=http://minio:9000
-      - S3_ACCESS_KEY=${MINIO_ROOT_USER}
-      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD}
-      - JWT_SECRET=${JWT_SECRET}
-      - E2EE_KEY_DIRECTORY_ENABLED=true
-    ports:
-      - "8443:8443"
+      NODE_ENV: production
+      PORT: 8080
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in server/.env}
+      JWT_SECRET: ${JWT_SECRET:?Set a random JWT_SECRET of at least 32 characters}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_started
-      minio:
-        condition: service_started
-    networks:
-      - sovereign-net
-
-  # PostgreSQL 16 Data Store
-  postgres:
-    image: postgres:16-alpine
-    container_name: sovereign-postgres
-    restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-sovereign}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_sovereign_db_pass_2026}
-      POSTGRES_DB: ${POSTGRES_DB:-sovereign_db}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/init.sql
+    networks: [sovereign-internal]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sovereign} -d ${POSTGRES_DB:-sovereign_db}"]
-      interval: 5s
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
       timeout: 5s
       retries: 5
-    networks:
-      - sovereign-net
+      start_period: 20s
 
-  # Redis 7 Event Bus & Realtime Cache
-  redis:
-    image: redis:7-alpine
-    container_name: sovereign-redis
-    restart: always
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-secure_redis_pass_2026}
-    volumes:
-      - redis_data:/data
-    networks:
-      - sovereign-net
-
-  # MinIO S3-Compatible Storage for Media & Encrypted Vault Backups
-  minio:
-    image: minio/minio:latest
-    container_name: sovereign-minio
-    restart: always
-    command: server /data --console-address ":9001"
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-sovereign_admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-sovereign_minio_secret_key_2026}
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in server/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in server/.env}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in server/.env}
     volumes:
-      - minio_data:/data
-    networks:
-      - sovereign-net
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [sovereign-internal]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      SOVEREIGN_DOMAIN: ${SOVEREIGN_DOMAIN:?Set a public DNS name in server/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      sovereign-gateway:
+        condition: service_healthy
+    networks: [sovereign-internal]
 
 volumes:
   postgres_data:
-  redis_data:
-  minio_data:
+  caddy_data:
+  caddy_config:
 
 networks:
-  sovereign-net:
+  sovereign-internal:
     driver: bridge

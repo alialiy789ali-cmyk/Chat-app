@@ -85,7 +85,7 @@ fun ChannelsScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "بث إعلامي وتواصلي واسع النطاق بدون رقابة أو وسطاء",
+                                text = "قنوات محلية تجريبية؛ لا يوجد بثّ عبر الخادم حاليًا",
                                 fontSize = 12.sp,
                                 color = SlateMuted
                             )
@@ -327,6 +327,19 @@ fun ChannelDetailScreen(
                 .padding(horizontal = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            item {
+                Surface(
+                    color = AmberWarning.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, AmberWarning.copy(alpha = 0.45f)),
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                ) {
+                    Text(
+                        "محتوى القناة تجريبي ومحفوظ محليًا؛ النشر والاشتراك لا يتزامنان مع خادم حاليًا.",
+                        modifier = Modifier.padding(10.dp), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
             item {
                 Spacer(modifier = Modifier.height(6.dp))
                 // Channel Description Card

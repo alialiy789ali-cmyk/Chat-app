@@ -1,6 +1,8 @@
 package com.example
 
 import com.example.crypto.CryptoEngine
+import com.example.data.EncryptedBackup
+import com.example.data.RepositorySnapshot
 import com.example.data.SovereignRepository
 import com.example.model.CallType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -127,5 +129,23 @@ class ExampleUnitTest {
         assertTrue(repository.activeCall.value?.isMuted == true)
 
         repository.endCall()
+    }
+
+    @Test
+    fun encryptedBackupRoundTripsAndRejectsWrongPassword() {
+        val snapshot = RepositorySnapshot(
+            currentUser = com.example.model.UserProfile(handle = "@backup_user"),
+            threads = emptyList(),
+            messages = emptyMap(),
+            channels = emptyList(),
+            channelPosts = emptyMap(),
+            feedPosts = emptyList()
+        )
+        val password = "correct horse battery".toCharArray()
+        val encrypted = EncryptedBackup.encrypt(snapshot, password)
+
+        assertFalse(String(encrypted, Charsets.ISO_8859_1).contains("@backup_user"))
+        assertEquals(snapshot, EncryptedBackup.decrypt(encrypted, "correct horse battery".toCharArray()))
+        assertNull(EncryptedBackup.decrypt(encrypted, "wrong password".toCharArray()))
     }
 }
