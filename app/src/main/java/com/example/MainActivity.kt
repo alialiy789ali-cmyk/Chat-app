@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.MainHubScreen
 import com.example.ui.SovereignViewModel
@@ -18,7 +19,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val sovereignViewModel: SovereignViewModel = viewModel()
+            val appContext = LocalContext.current.applicationContext
+            val sovereignViewModel: SovereignViewModel = viewModel(
+                factory = SovereignViewModel.factory(appContext)
+            )
             val userProfile by sovereignViewModel.currentUser.collectAsState()
 
             SovereignTheme(darkTheme = userProfile.isDarkMode) {

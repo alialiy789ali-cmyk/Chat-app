@@ -1,76 +1,84 @@
--- Sovereign Core Database Schema
--- Designed for High-Throughput E2EE Message Routing & Social Graph
+-- Sovereign gateway schema. Every message body is an opaque client-encrypted envelope.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS app_users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    handle VARCHAR(64) UNIQUE NOT NULL,
+    handle VARCHAR(32) UNIQUE NOT NULL,
     display_name VARCHAR(128) NOT NULL,
-    bio TEXT DEFAULT '',
-    avatar_url TEXT DEFAULT '',
-    public_key_fingerprint VARCHAR(128) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS user_devices (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    device_name VARCHAR(128) NOT NULL,
+    password_salt BYTEA NOT NULL,
+    password_hash BYTEA NOT NULL,
     identity_public_key TEXT NOT NULL,
-    pre_key_bundle JSONB NOT NULL,
-    last_seen_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    encryption_public_key TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS chat_threads (
+CREATE TABLE IF NOT EXISTS encrypted_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    is_group BOOLEAN DEFAULT false,
-    title VARCHAR(128),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    sender_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    recipient_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    client_message_id UUID NOT NULL,
+    encrypted_payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    delivered_at TIMESTAMPTZ,
+    read_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    UNIQUE (sender_id, client_message_id),
+    CHECK (sender_id <> recipient_id)
 );
+CREATE INDEX IF NOT EXISTS idx_encrypted_messages_recipient_created
+    ON encrypted_messages(recipient_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_encrypted_messages_sender_created
+    ON encrypted_messages(sender_id, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS messages (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    thread_id UUID REFERENCES chat_threads(id) ON DELETE CASCADE,
-    sender_handle VARCHAR(64) NOT NULL,
-    recipient_handle VARCHAR(64) NOT NULL,
-    encrypted_payload TEXT NOT NULL,
-    media_type VARCHAR(32) DEFAULT 'NONE',
-    media_url TEXT,
-    self_destruct_seconds INT DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS channels (
+CREATE TABLE IF NOT EXISTS sovereign_channels (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title VARCHAR(128) NOT NULL,
     handle VARCHAR(64) UNIQUE NOT NULL,
-    description TEXT,
-    owner_id UUID REFERENCES users(id),
-    subscriber_count INT DEFAULT 1,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    description TEXT NOT NULL DEFAULT '',
+    owner_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS channel_members (
+    channel_id UUID NOT NULL REFERENCES sovereign_channels(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    role VARCHAR(16) NOT NULL DEFAULT 'subscriber' CHECK (role IN ('owner', 'admin', 'subscriber')),
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (channel_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS channel_posts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    channel_id UUID REFERENCES channels(id) ON DELETE CASCADE,
+    channel_id UUID NOT NULL REFERENCES sovereign_channels(id) ON DELETE CASCADE,
+    author_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
-    media_url TEXT,
-    views_count INT DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_channel_posts_created ON channel_posts(channel_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS social_posts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    author_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    author_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
-    media_url TEXT,
-    hashtags TEXT[],
-    likes_count INT DEFAULT 0,
-    reposts_count INT DEFAULT 0,
-    comments_count INT DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    hashtags TEXT[] NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_social_posts_created ON social_posts(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS post_reactions (
+    post_id UUID NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    reaction VARCHAR(16) NOT NULL CHECK (reaction IN ('like', 'repost')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (post_id, user_id, reaction)
 );
 
-CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
-CREATE INDEX IF NOT EXISTS idx_social_posts_created_at ON social_posts(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_channel_posts_channel_id ON channel_posts(channel_id);
+CREATE TABLE IF NOT EXISTS post_comments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id UUID NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
+    author_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_post_comments_post_created ON post_comments(post_id, created_at);

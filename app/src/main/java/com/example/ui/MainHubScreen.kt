@@ -1,11 +1,8 @@
 package com.example.ui
 
 import androidx.compose.animation.*
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -15,7 +12,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -52,8 +48,9 @@ fun MainHubScreen(
             topBar = {
                 SovereignHeader(
                     title = "السيادي Sovereign",
-                    subtitle = if (currentUser.isRtl) "شبكة اتصالات ومراسلة مستقلة" else "Sovereign Independent Communications",
+                    subtitle = if (currentUser.isRtl) "نموذج محلي للمراسلة والمجتمع" else "Local messaging prototype",
                     latencyMs = latency,
+                    isConnected = currentUser.isConnected,
                     isRtl = currentUser.isRtl,
                     onToggleRtl = { viewModel.toggleRtl() },
                     onSwitchUser = { viewModel.switchActiveUserForTesting() },
@@ -206,7 +203,7 @@ fun MainHubScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.AddComment, contentDescription = null, tint = EmeraldPrimary)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (isGroup) "إنشاء مجموعة مشفرة" else "بدء محادثة مشفرة جديدة")
+                    Text(if (isGroup) "إنشاء مجموعة محلية" else "بدء محادثة محلية جديدة")
                 }
             },
             text = {
@@ -386,14 +383,14 @@ fun MainHubScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "أدخل عنوان خادم الاستضافة الذاتية (Self-Hosted Sovereign Node):",
+                        "احفظ عنوان خادمك محليًا. الاتصال به غير مفعّل في هذه النسخة:",
                         fontSize = 12.sp,
                         color = SlateMuted
                     )
                     OutlinedTextField(
                         value = nodeUrl,
                         onValueChange = { nodeUrl = it },
-                        label = { Text("عنوان الخادم REST / WS") },
+                        label = { Text("عنوان الخادم (إعداد محفوظ فقط)") },
                         modifier = Modifier.fillMaxWidth().testTag("node_url_input"),
                         singleLine = true
                     )
@@ -407,7 +404,7 @@ fun MainHubScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CyanSignal)
                 ) {
-                    Text("حفظ والاتصال", color = SovereignVoid)
+                    Text("حفظ محليًا", color = SovereignVoid)
                 }
             },
             dismissButton = {
@@ -418,83 +415,23 @@ fun MainHubScreen(
         )
     }
 
-    // Docker Compose Self-Hosted Guide Dialog
+    // Self-hosting information: no runnable backend is included yet.
     if (showDockerGuideDialog) {
-        val dockerComposeYaml = """
-version: '3.8'
-
-services:
-  sovereign-api:
-    image: sovereign-node:latest
-    container_name: sovereign-backend
-    restart: always
-    environment:
-      - DATABASE_URL=postgresql://sovereign:secret@postgres:5432/sovereign_db
-      - REDIS_URL=redis://redis:6379
-      - E2EE_KEY_DIRECTORY_ENABLED=true
-      - WEBSOCKET_PORT=8443
-    ports:
-      - "8443:8443"
-    depends_on:
-      - postgres
-      - redis
-
-  postgres:
-    image: postgres:16-alpine
-    container_name: sovereign-db
-    restart: always
-    environment:
-      POSTGRES_USER: sovereign
-      POSTGRES_PASSWORD: secret_db_password_here
-      POSTGRES_DB: sovereign_db
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    container_name: sovereign-redis
-    restart: always
-
-volumes:
-  pgdata:
-        """.trimIndent()
-
         AlertDialog(
             onDismissRequest = { viewModel.setShowDockerGuide(false) },
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Dns, contentDescription = null, tint = EmeraldPrimary)
+                    Icon(Icons.Default.Dns, contentDescription = null, tint = AmberWarning)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("دليل تشغيل العقدة الذاتية (Docker)")
+                    Text("الخادم الذاتي غير جاهز للتشغيل")
                 }
             },
             text = {
-                Column(
-                    modifier = Modifier
-                        .height(300.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        "لتشغيل العقدة السيادية على خادمك الخاص (VPS)، أنشئ ملف `docker-compose.yml` وشغّله بأمر `docker compose up -d`:",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = SovereignVoid,
-                        border = BorderStroke(1.dp, SovereignBorder),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = dockerComposeYaml,
-                            modifier = Modifier.padding(10.dp),
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 10.sp,
-                            color = EmeraldGlow
-                        )
-                    }
-                }
+                Text(
+                    "أُضيفت الآن بوابة Node.js وREST/WebSocket وملفات Docker وTLS proxy. لكن تطبيق Android لم يُربط بها بعد، وتشفير الرسائل الطرفي ومكالمات WebRTC ما زالا غير جاهزين. راجع DEPLOYMENT.md لإعداد الخادم، ولا تستخدمه للإنتاج قبل مراجعة الأمن.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             },
             confirmButton = {
                 Button(
@@ -506,4 +443,5 @@ volumes:
             }
         )
     }
+
 }

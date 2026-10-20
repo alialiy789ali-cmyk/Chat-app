@@ -43,7 +43,7 @@ fun CallsScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // E2EE Call Encryption Banner
+            // Informational banner for the non-networked call UI
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = RoundedCornerShape(14.dp),
@@ -69,13 +69,13 @@ fun CallsScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "اتصالات صوتية ومرئية مشفرة",
+                            text = "واجهة مكالمات تجريبية",
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "بروتوكول WebRTC مع تبادل مفاتيح أمان طرفية Peer-to-Peer",
+                            text = "لا يتم حاليًا نقل الصوت أو الفيديو عبر الشبكة",
                             fontSize = 12.sp,
                             color = SlateMuted
                         )
@@ -153,11 +153,11 @@ fun CallContactRow(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SovereignAvatar(name = name, colorHex = colorHex, sizeDp = 44, showShield = true)
+                SovereignAvatar(name = name, colorHex = colorHex, sizeDp = 44, showShield = false)
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(text = name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Text(text = "$handle • مفتاح E2EE مؤكد", fontSize = 11.sp, color = EmeraldPrimary)
+                    Text(text = "$handle • واجهة تجريبية فقط", fontSize = 11.sp, color = AmberWarning)
                 }
             }
 
@@ -225,7 +225,7 @@ fun ActiveCallOverlay(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (call.callType == CallType.AUDIO) "مكالمة صوتية مشفرة طرفياً" else "مكالمة مرئية مشفرة طرفياً",
+                            text = if (call.callType == CallType.AUDIO) "محاكاة مكالمة صوتية" else "محاكاة مكالمة مرئية",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = EmeraldPrimary
@@ -237,7 +237,7 @@ fun ActiveCallOverlay(
 
                 Text(
                     text = when (call.state) {
-                        CallState.RINGING -> "جاري الاتصال والتحقق من التشفير..."
+                        CallState.RINGING -> "محاكاة بدء الاتصال..."
                         CallState.CONNECTING -> "المصافحة الرقمية (P2P Handshake)..."
                         CallState.CONNECTED -> {
                             val mins = call.durationSec / 60
@@ -277,7 +277,7 @@ fun ActiveCallOverlay(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "بث الفيديو المشفر WebRTC مباشر",
+                                text = "معاينة واجهة فقط — لا يوجد بث فيديو",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = TitaniumWhite
@@ -309,7 +309,7 @@ fun ActiveCallOverlay(
                         name = call.peerName,
                         colorHex = 0xFF10B981,
                         sizeDp = 100,
-                        showShield = true
+                        showShield = false
                     )
                 }
 
@@ -330,7 +330,7 @@ fun ActiveCallOverlay(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Safety Number Verification Card
+                // Non-cryptographic demo session identifier
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = SovereignVoid,
@@ -341,7 +341,7 @@ fun ActiveCallOverlay(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "رمز الأمان المشترك (Safety Number):",
+                            text = "معرّف جلسة تجريبي:",
                             fontSize = 10.sp,
                             color = SlateMuted
                         )

@@ -4,7 +4,8 @@ enum class MessageStatus {
     SENDING,
     SENT,
     DELIVERED,
-    READ
+    READ,
+    FAILED
 }
 
 enum class MediaType {
@@ -22,12 +23,13 @@ data class MessageItem(
     val content: String,
     val timestamp: Long,
     val status: MessageStatus = MessageStatus.SENT,
-    val isEncrypted: Boolean = true,
+    val isEncrypted: Boolean = false,
     val mediaType: MediaType = MediaType.NONE,
     val mediaUrl: String? = null,
     val audioDurationSec: Int = 0,
     val selfDestructSec: Int = 0,
-    val isSelf: Boolean = false
+    val isSelf: Boolean = false,
+    val remoteId: String? = null
 )
 
 data class ChatThread(
@@ -39,8 +41,8 @@ data class ChatThread(
     val lastTimestamp: Long = System.currentTimeMillis(),
     val unreadCount: Int = 0,
     val avatarColor: Long = 0xFF10B981,
-    val isVerified: Boolean = true,
-    val isEncrypted: Boolean = true,
+    val isVerified: Boolean = false,
+    val isEncrypted: Boolean = false,
     val membersCount: Int = 2,
     val isPinned: Boolean = false,
     val peerPublicKeyFingerprint: String = "SHA256:7F8B:3A91:E204:55BC:90A1"
@@ -55,7 +57,7 @@ data class ChannelItem(
     val avatarColor: Long = 0xFF38BDF8,
     val isPublic: Boolean = true,
     val isAdmin: Boolean = false,
-    val isVerified: Boolean = true,
+    val isVerified: Boolean = false,
     val unreadCount: Int = 0
 )
 
@@ -125,11 +127,11 @@ data class CallSession(
 data class UserProfile(
     val handle: String = "@sovereign_user",
     val displayName: String = "Sovereign Citizen",
-    val bio: String = "مستقل رقمياً • Sovereign by Design • End-to-End Encrypted",
+    val bio: String = "مستقل رقمياً • Sovereign by Design • تخزين محلي مشفّر",
     val avatarColor: Long = 0xFF10B981,
     val publicKeyFingerprint: String = "4A7B 89E1 FC02 3381 990B 52AA",
     val serverNodeUrl: String = "https://node.sovereign.local:8443",
-    val isConnected: Boolean = true,
+    val isConnected: Boolean = false,
     val isRtl: Boolean = true,
     val isDarkMode: Boolean = true
 )

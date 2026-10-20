@@ -50,6 +50,17 @@ fun FeedScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
+            Surface(
+                color = AmberWarning.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, AmberWarning.copy(alpha = 0.45f)),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    "الخلاصة محلية تجريبية؛ الحسابات والمنشورات المعروضة بيانات نموذجية وليست أخبارًا أو نتائج فعلية عن التطبيق.",
+                    modifier = Modifier.padding(10.dp), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface
+                )
+            }
             // Hashtag bar
             if (allTags.isNotEmpty()) {
                 LazyRow(
@@ -139,7 +150,7 @@ fun SocialPostCard(
                 name = post.authorName,
                 colorHex = post.authorAvatarColor,
                 sizeDp = 44,
-                showShield = true
+                showShield = false
             )
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -158,12 +169,6 @@ fun SocialPostCard(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.Verified,
-                            contentDescription = "Verified",
-                            tint = EmeraldPrimary,
-                            modifier = Modifier.size(14.dp)
-                        )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = post.authorHandle,

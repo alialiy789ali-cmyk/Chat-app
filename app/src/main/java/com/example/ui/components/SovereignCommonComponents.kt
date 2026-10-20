@@ -81,6 +81,7 @@ fun SovereignHeader(
     title: String,
     subtitle: String,
     latencyMs: Int,
+    isConnected: Boolean,
     isRtl: Boolean,
     onToggleRtl: () -> Unit,
     onSwitchUser: () -> Unit,
@@ -134,8 +135,8 @@ fun SovereignHeader(
                             // Status Pill
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = EmeraldPrimary.copy(alpha = 0.15f),
-                                border = BorderStroke(0.8.dp, EmeraldPrimary.copy(alpha = 0.4f))
+                                color = (if (isConnected) EmeraldPrimary else SlateMuted).copy(alpha = 0.15f),
+                                border = BorderStroke(0.8.dp, (if (isConnected) EmeraldPrimary else SlateMuted).copy(alpha = 0.4f))
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -145,14 +146,14 @@ fun SovereignHeader(
                                         modifier = Modifier
                                             .size(6.dp)
                                             .clip(CircleShape)
-                                            .background(EmeraldPrimary)
+                                            .background(if (isConnected) EmeraldPrimary else SlateMuted)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "${latencyMs}ms",
+                                        text = if (isConnected) "${latencyMs}ms" else "LOCAL",
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = EmeraldPrimary,
+                                        color = if (isConnected) EmeraldPrimary else SlateMuted,
                                         fontFamily = FontFamily.Monospace
                                     )
                                 }
@@ -258,13 +259,13 @@ fun SovereignSecurityBadge(
                 )
                 Column {
                     Text(
-                        text = "بصمة التشفير السيادية (E2EE Active)",
+                        text = "تخزين محلي مشفّر على هذا الجهاز",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = EmeraldPrimary
                     )
                     Text(
-                        text = fingerprint,
+                        text = "معرّف محلي تجريبي: $fingerprint",
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                         color = SlateMuted
@@ -272,8 +273,8 @@ fun SovereignSecurityBadge(
                 }
             }
             Icon(
-                imageVector = Icons.Default.VerifiedUser,
-                contentDescription = "Verify Key",
+                imageVector = Icons.Default.Lock,
+                contentDescription = "Local encryption",
                 tint = EmeraldPrimary,
                 modifier = Modifier.size(18.dp)
             )
