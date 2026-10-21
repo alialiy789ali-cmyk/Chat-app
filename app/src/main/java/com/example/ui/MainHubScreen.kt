@@ -177,7 +177,7 @@ fun MainHubScreen(
                     .padding(paddingValues)
             ) {
                 when (currentTab) {
-                    HubTab.CHATS -> LiveChatScreen()
+                    HubTab.CHATS -> ChatsScreen(viewModel = viewModel)
                     HubTab.CHANNELS -> ChannelsScreen(viewModel = viewModel)
                     HubTab.FEED -> FeedScreen(viewModel = viewModel)
                     HubTab.CALLS -> CallsScreen(viewModel = viewModel)

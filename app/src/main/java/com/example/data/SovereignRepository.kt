@@ -5,6 +5,7 @@ import com.example.crypto.CryptoEngine
 import com.example.crypto.E2eeEngine
 import okhttp3.WebSocket
 import com.example.model.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -530,59 +531,68 @@ class SovereignRepository(
             try {
                 val records = gatewayApi.listMessages(_currentUser.value.serverNodeUrl, activeSession.accessToken)
                 val keyCache = mutableMapOf<String, GatewayPeerKeys>()
+                var skippedMessages = 0
                 for (record in records) {
-                    val isOutgoing = normalizeGatewayHandle(record.senderHandle) == normalizeGatewayHandle(activeSession.handle)
-                    val clientId = record.clientMessageId.ifBlank { record.envelope.messageId }
-                    if (isOutgoing) {
-                        val existing = _messages.value.entries.firstNotNullOfOrNull { (threadId, items) ->
-                            items.firstOrNull { it.id == clientId }?.let { threadId to it }
-                        }
-                        if (existing != null) {
-                            val status = when {
-                                record.readAt != null -> MessageStatus.READ
-                                record.deliveredAt != null -> MessageStatus.DELIVERED
-                                else -> MessageStatus.SENT
+                    try {
+                        val isOutgoing = normalizeGatewayHandle(record.senderHandle) == normalizeGatewayHandle(activeSession.handle)
+                        val clientId = record.clientMessageId.ifBlank { record.envelope.messageId }
+                        if (isOutgoing) {
+                            val existing = _messages.value.entries.firstNotNullOfOrNull { (threadId, items) ->
+                                items.firstOrNull { it.id == clientId }?.let { threadId to it }
                             }
-                            updateMessage(existing.first, clientId) { it.copy(status = status, isEncrypted = true, remoteId = record.serverId) }
+                            if (existing != null) {
+                                val status = when {
+                                    record.readAt != null -> MessageStatus.READ
+                                    record.deliveredAt != null -> MessageStatus.DELIVERED
+                                    else -> MessageStatus.SENT
+                                }
+                                updateMessage(existing.first, clientId) { it.copy(status = status, isEncrypted = true, remoteId = record.serverId) }
+                            }
+                            continue
                         }
-                        continue
-                    }
-                    if (_messages.value.values.any { items -> items.any { it.id == clientId } }) continue
-                    val sender = normalizeGatewayHandle(record.senderHandle)
-                    val peerKeys = keyCache.getOrPut(sender) {
-                        gatewayApi.getPeerKeys(_currentUser.value.serverNodeUrl, activeSession.accessToken, sender)
-                    }
-                    val plaintext = withContext(Dispatchers.IO) {
-                        E2eeEngine.decrypt(
-                            envelope = record.envelope,
-                            senderHandle = "@$sender",
-                            recipientHandle = activeSession.handle,
-                            recipientEncryptionPrivateKeyPkcs8Base64 = activeSession.encryptionPrivateKeyPkcs8Base64,
-                            senderSigningPublicKeyPem = peerKeys.identityPublicKey
+                        if (_messages.value.values.any { items -> items.any { it.id == clientId } }) continue
+                        val sender = normalizeGatewayHandle(record.senderHandle)
+                        val peerKeys = keyCache.getOrPut(sender) {
+                            gatewayApi.getPeerKeys(_currentUser.value.serverNodeUrl, activeSession.accessToken, sender)
+                        }
+                        val plaintext = withContext(Dispatchers.IO) {
+                            E2eeEngine.decrypt(
+                                envelope = record.envelope,
+                                senderHandle = "@$sender",
+                                recipientHandle = activeSession.handle,
+                                recipientEncryptionPrivateKeyPkcs8Base64 = activeSession.encryptionPrivateKeyPkcs8Base64,
+                                senderSigningPublicKeyPem = peerKeys.identityPublicKey
+                            )
+                        }
+                        val thread = _threads.value.firstOrNull { normalizeGatewayHandle(it.handle) == sender && !it.isGroup }
+                            ?: ChatThread(
+                                id = "gateway_$sender", title = "@$sender", handle = "@$sender",
+                                lastMessage = plaintext, lastTimestamp = record.envelope.sentAt,
+                                unreadCount = 0, avatarColor = 0xFF38BDF8, isEncrypted = true
+                            )
+                        val message = MessageItem(
+                            id = clientId, threadId = thread.id,
+                            senderHandle = "@$sender", recipientHandle = activeSession.handle,
+                            content = plaintext, timestamp = record.envelope.sentAt,
+                            status = if (record.readAt != null) MessageStatus.READ else MessageStatus.DELIVERED,
+                            isEncrypted = true, isSelf = false, remoteId = record.serverId
                         )
-                    }
-                    val thread = _threads.value.firstOrNull { normalizeGatewayHandle(it.handle) == sender && !it.isGroup }
-                        ?: ChatThread(
-                            id = "gateway_$sender", title = "@$sender", handle = "@$sender",
-                            lastMessage = plaintext, lastTimestamp = record.envelope.sentAt,
-                            unreadCount = 0, avatarColor = 0xFF38BDF8, isEncrypted = true
-                        )
-                    val message = MessageItem(
-                        id = clientId, threadId = thread.id,
-                        senderHandle = "@$sender", recipientHandle = activeSession.handle,
-                        content = plaintext, timestamp = record.envelope.sentAt,
-                        status = if (record.readAt != null) MessageStatus.READ else MessageStatus.DELIVERED,
-                        isEncrypted = true, isSelf = false, remoteId = record.serverId
-                    )
-                    _messages.update { it + (thread.id to (it[thread.id].orEmpty() + message)) }
-                    _threads.update { list ->
-                        val existing = list.firstOrNull { it.id == thread.id }
-                        if (existing == null) listOf(thread.copy(lastMessage = plaintext, lastTimestamp = message.timestamp, unreadCount = 1)) + list
-                        else list.map { current -> if (current.id == thread.id) current.copy(lastMessage = plaintext, lastTimestamp = message.timestamp, unreadCount = current.unreadCount + 1, isEncrypted = true) else current }
+                        _messages.update { it + (thread.id to (it[thread.id].orEmpty() + message)) }
+                        _threads.update { list ->
+                            val existing = list.firstOrNull { it.id == thread.id }
+                            if (existing == null) listOf(thread.copy(lastMessage = plaintext, lastTimestamp = message.timestamp, unreadCount = 1)) + list
+                            else list.map { current -> if (current.id == thread.id) current.copy(lastMessage = plaintext, lastTimestamp = message.timestamp, unreadCount = current.unreadCount + 1, isEncrypted = true) else current }
+                        }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        // One undecryptable or invalid message must not block the rest of the inbox.
+                        skippedMessages++
                     }
                 }
                 persistState()
-                _gatewayAccountMessage.value = "تمت مزامنة ${records.size} رسالة مشفّرة من البوابة."
+                _gatewayAccountMessage.value = if (skippedMessages == 0) "تمت مزامنة ${records.size} رسالة مشفّرة من البوابة."
+                    else "تمت المزامنة؛ تعذّر فك $skippedMessages رسالة وتم تجاوزها."
             } catch (error: Exception) {
                 _gatewayAccountMessage.value = "تعذرت المزامنة: ${error.message ?: "خطأ اتصال"}"
             }
